@@ -1,0 +1,93 @@
+name: Package and publish release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-r10
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: r10
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate and package offline scripts
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib, re, zipfile, os
+
+          tag = os.environ["RELEASE_TAG"]
+          paths = [
+              "Run-Patch.ps1", "PclPatchCore.cs",
+              "仅检查.cmd", "应用补丁.cmd", "恢复原版.cmd",
+              "使用说明.txt", "README.md", "CHANGELOG.md",
+              "lib/dnlib.dll", "lib/dnlib-LICENSE.txt",
+          ]
+          for name in paths:
+              assert Path(name).is_file(), "Missing file: " + name
+          ps_bytes = Path("Run-Patch.ps1").read_bytes()
+          assert ps_bytes.startswith(b"\xef\xbb\xbf"), "PowerShell UTF-8 BOM is required for Windows 7"
+          ps = ps_bytes.decode("utf-8-sig").replace("\r\n", "\n")
+          cs = Path("PclPatchCore.cs").read_text(encoding="utf-8-sig").replace("\r\n", "\n")
+          embedded = ps.split("$coreSource = @'\n", 1)[1].split("\n'@", 1)[0]
+          assert embedded == cs, "Embedded and standalone C# sources differ"
+          assert tag + "（内嵌核心版）" in ps, "Release tag does not match script"
+          dll = Path("lib/dnlib.dll").read_bytes()
+          digest = hashlib.sha256(dll).hexdigest()
+          assert digest in ps, "dnlib hash does not match script"
+          for name in ["仅检查.cmd", "应用补丁.cmd", "恢复原版.cmd"]:
+              raw = Path(name).read_bytes()
+              assert b"\r\n" in raw, "CMD file has no CRLF: " + name
+
+          dist = Path("dist")
+          dist.mkdir(exist_ok=True)
+          asset = dist / ("PCL-Download-Restore-" + tag + ".zip")
+          with zipfile.ZipFile(asset, "w", zipfile.ZIP_DEFLATED) as z:
+              for name in paths:
+                  z.write(name, "PCL-Download-Restore-" + tag + "/" + name)
+          with zipfile.ZipFile(asset) as z:
+              assert z.testzip() is None
+              assert len(z.namelist()) == len(paths)
+          sums = hashlib.sha256(asset.read_bytes()).hexdigest() + "  " + asset.name + "\n"
+          (dist / "SHA256SUMS.txt").write_text(sums, encoding="utf-8")
+          notes = """恢复 PCL 的游戏下载、本地整合包导入和在线整合包安装入口。
+
+          - 完全离线运行，不需要 Python，也不需要首次下载环境。
+          - 包含检查、应用补丁、恢复原版及所需解析库。
+          - 按 .NET 代码结构识别，保留备份并校验写入结果。
+          - 当前 r10 已反馈在 Windows 7、Windows 11 可用。
+
+          使用：完整解压 ZIP，退出 PCL，将 PCL EXE 先拖到“仅检查.cmd”，通过后再拖到“应用补丁.cmd”。请保留目标 EXE 旁生成的备份和记录。
+
+          适配范围：保留对应 VB/.NET Framework 结构的 PCL 构建。已验证真实样本为快照版 2.99.0.0（414）；不保证所有历史或未来版本兼容，结构不匹配时会停止。本包不含 PCL 启动器或游戏文件。
+          """
+          (dist / "release-notes.md").write_text(notes, encoding="utf-8")
+          print(sums)
+      - name: Publish r10
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; leaving it unchanged."
+            exit 0
+          fi
+          gh release create "$RELEASE_TAG" \
+            --target "$GITHUB_SHA" \
+            --title "$RELEASE_TAG" \
+            --notes-file dist/release-notes.md \
+            --latest \
+            "dist/PCL-Download-Restore-$RELEASE_TAG.zip" \
+            dist/SHA256SUMS.txt

@@ -1,0 +1,5 @@
+*.ps1 -text
+*.cmd -text
+*.dll binary
+*.cs text eol=lf
+*.md text eol=lf

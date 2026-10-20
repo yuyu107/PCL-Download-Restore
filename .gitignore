@@ -1,0 +1,10 @@
+*.pcl-offline-original.bak
+*.pcl-offline.txt
+*.download-original.bak
+*.pcl-universal-original.bak
+*.pcl-universal.json
+*.tmp
+*.previous
+Plain Craft Launcher 2.exe
+Runtime-Python38/
+*.nupkg

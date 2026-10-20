@@ -1,0 +1,29 @@
+﻿r10：按 CLR 版本分别设置编译引用。CLR 2 保留 Win7 已通过的配置；CLR 4 显式引用当前 System.dll，修复 Win11 编译时 ISet<T> 缺少程序集引用的问题。补丁核心未变。
+
+r10：去掉反射 Invoke 的 object[] 参数传递，改用 PowerShell 静态方法绑定，避免旧版 PSObject 包装导致类型转换失败。新增失败位置输出。
+
+PCL 离线通用补丁 r10（内嵌核心版）
+
+请解压到一个新的文件夹，不要覆盖旧版目录。
+将实际使用的 PCL EXE 拖到“仅检查.cmd”上；检查通过后拖到“应用补丁.cmd”上。
+PCL 不需要搬到脚本目录。操作前退出 PCL，所有备份都保存在目标 EXE 旁。
+
+启动后第一行必须显示：PCL 离线通用补丁 r10（内嵌核心版）。
+下面还会显示实际运行的脚本路径，用于排查运行了旧脚本或旧快捷方式。
+
+本版把 C# 核心直接内嵌到 Run-Patch.ps1，彻底避免旧 PclPatchCore.cs 残留被编译。
+包内 PclPatchCore.cs 仅供阅读核对，运行时不会读取它。
+两处 ModuleDefMD.Load 都显式传入 ModuleCreationOptions 参数。
+保留 r7 的程序集解析器、显式编译器版本选择及旧 .NET 清理方法兼容修复。
+
+不需要 Python、联网或手动配置执行策略。请保留 lib 文件夹。
+支持从本次会话 v1-v6 及 Python 通用版迁移，需保留相应原版备份。
+本版自己的备份为 .pcl-offline-original.bak 和 .pcl-offline.txt。
+如果此前离线版已应用成功，会识别已有记录；恢复时把 EXE 拖到“恢复原版.cmd”。
+
+仍然按目标 .NET 代码结构识别；未知或重构版本会停止。
+核心已编译并执行了样本重写、写入后求值栈检查和资源保留检查。
+Windows PowerShell 及修改后启动器的 GUI 功能仍需实机验证，未宣称 Win7 已全流程验证。
+
+dnlib 4.5.0 net35 解析依赖来源：https://www.nuget.org/packages/dnlib/4.5.0
+许可证见 lib/dnlib-LICENSE.txt。

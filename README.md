@@ -10,9 +10,17 @@
 - 自动备份、检查、重复应用识别和恢复原版。
 - 识别类型、方法、字段和调用关系，不使用固定偏移定位新版本。
 
+## 下载
+
+- **[下载 r10 离线脚本包](https://github.com/yuyu107/PCL-Download-Restore/releases/download/r10/PCL-Download-Restore-r10.zip)**
+- [查看最新 Release](https://github.com/yuyu107/PCL-Download-Restore/releases/latest)
+- [r10 SHA256 校验文件](https://github.com/yuyu107/PCL-Download-Restore/releases/download/r10/SHA256SUMS.txt)
+
+发布包已包含所需解析库，无需安装 Python，也无需联网准备运行环境。需要查看或修改源码时，可[下载仓库源码 ZIP](https://github.com/yuyu107/PCL-Download-Restore/archive/refs/heads/main.zip)。
+
 ## 使用
 
-1. [下载源码 ZIP](https://github.com/yuyu107/PCL-Download-Restore/archive/refs/heads/main.zip) 并完整解压，保留 `lib` 文件夹。
+1. 下载上面的离线脚本包并完整解压，保留 `lib` 文件夹。
 2. 完全退出 PCL。
 3. 将实际使用的 PCL EXE 拖到 **仅检查.cmd** 上。
 4. 检查通过后，将同一个 EXE 拖到 **应用补丁.cmd** 上。

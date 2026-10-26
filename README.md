@@ -4,7 +4,8 @@
 
 ## 功能
 
-- 恢复 Minecraft 原版下载列表入口。
+- 恢复 Minecraft 原版下载列表入口，以及被隐藏的“原版游戏”侧栏项。
+- 恢复“版本选择 → 添加或导入”区域的“导入整合包”按钮，以及整合包搜索页的导入按钮。
 - 恢复手动选择、拖入整合包及各格式安装分发。
 - 恢复在线整合包版本的直接下载安装，保留独立的“另存为”按钮。
 - 自动备份、检查、重复应用识别和恢复原版。
@@ -12,9 +13,9 @@
 
 ## 下载
 
-- **[下载 r10 离线脚本包](https://github.com/yuyu107/PCL-Download-Restore/releases/download/r10/PCL-Download-Restore-r10.zip)**
+- **[下载 r12 离线脚本包](https://github.com/yuyu107/PCL-Download-Restore/releases/download/r12/PCL-Download-Restore-r12.zip)**
 - [查看最新 Release](https://github.com/yuyu107/PCL-Download-Restore/releases/latest)
-- [r10 SHA256 校验文件](https://github.com/yuyu107/PCL-Download-Restore/releases/download/r10/SHA256SUMS.txt)
+- [r12 SHA256 校验文件](https://github.com/yuyu107/PCL-Download-Restore/releases/download/r12/SHA256SUMS.txt)
 
 发布包已包含所需解析库，无需安装 Python，也无需联网准备运行环境。需要查看或修改源码时，可[下载仓库源码 ZIP](https://github.com/yuyu107/PCL-Download-Restore/archive/refs/heads/main.zip)。
 
@@ -35,7 +36,7 @@
 - 使用系统自带 Windows PowerShell 和 .NET Framework 编译组件。
 - 当前 r10 已由用户反馈在 Windows 7 和 Windows 11 可用。
 - 目标是仍保留对应 VB/.NET Framework 代码结构的 PCL 构建。
-- 已验证的真实样本是快照版 **2.99.0.0（414）**；文件资源中出现的 2.13.1 并非本次快照的实际程序集版本。
+- 已验证真实样本包括快照版 **2.99.0.0（414）** 和正式版程序集 **2.99.0.1**。r12 已由用户确认恢复正式版入口；文件资源版本不一定等于实际程序集版本。
 - 不承诺所有历史版、未来版或第三方修改版兼容；结构不匹配时停止，不写入目标 EXE。
 - PCL CE、重构版、混淆版及强名称签名构建不在当前适配范围。
 - 修复入口不会解决启动器自身的系统兼容、网络、资源失效或整合包内容问题。
@@ -49,7 +50,9 @@
 
 请保留两者。PCL 更新或被其他工具修改后，记录不匹配时脚本会停止；可把新原版放到新文件夹中重新操作，避免混用旧备份。
 
-支持迁移此前本项目测试阶段的固定版 v1–v6 和 Python 通用版，需保留它们对应的原版备份。恢复操作会同时撤销本工具的全部修复。
+支持从 r10、r11 升级，保留对应原版备份和记录后直接应用即可，不必先手动恢复。r12 会从校验通过的原版备份重新生成补丁，不会在旧修改上重复叠加。
+
+也支持迁移早期固定版 v1–v6 和 Python 通用版，需保留它们对应的原版备份。r12 使用 `pcl-offline-3` 记录格式；恢复时请使用 r12 随附的恢复脚本。恢复操作会同时撤销本工具的全部修复。
 
 ## 实现
 
@@ -61,7 +64,9 @@
 
 ## 验证
 
-- 核心源码实际编译并对真实快照执行过程序集重写。
+- 核心源码实际编译，并对快照版及正式版执行过程序集重写。
+- 已检查正式版侧栏、导入按钮显示条件及版本选择列表项的添加和点击回调。
+- r12 正式版入口恢复得到用户实机确认。
 - 修改方法写入前后的求值栈检查通过。
 - 测试样本的托管资源、原生图标和版本资源逐字节保持一致。
 - 人工移动方法位置并更改版本号的样本通过结构识别。

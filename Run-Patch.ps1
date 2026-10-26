@@ -20,7 +20,7 @@ function Atomic-Write([string]$File,[byte[]]$Data) {
 }
 try {
     $base = Split-Path -Parent $MyInvocation.MyCommand.Path
-    Write-Host 'PCL 离线通用补丁 r10（内嵌核心版）'
+    Write-Host 'PCL 离线通用补丁 r12（内嵌核心版）'
     Write-Host ('当前脚本：' + $MyInvocation.MyCommand.Path)
     if ([string]::IsNullOrEmpty($Target)) { $Target = Join-Path $base 'Plain Craft Launcher 2.exe' }
     $Target = (Resolve-Path -LiteralPath $Target).ProviderPath
@@ -31,7 +31,7 @@ try {
     [byte[]]$source = $current
     if ([IO.File]::Exists($record)) {
         $lines = [IO.File]::ReadAllLines($record)
-        if (($lines.Length -ne 3) -or ($lines[0] -ne 'pcl-offline-1')) { throw '备份记录格式不匹配。' }
+        if (($lines.Length -ne 3) -or (($lines[0] -ne 'pcl-offline-1') -and ($lines[0] -ne 'pcl-offline-2') -and ($lines[0] -ne 'pcl-offline-3'))) { throw '备份记录格式不匹配。' }
         if (($currentHash -ne $lines[1]) -and ($currentHash -ne $lines[2])) { throw '程序已更新或被其他工具修改。请将新原版放到新文件夹后再运行。' }
         if (![IO.File]::Exists($backup)) { throw '找不到原版备份。' }
         $source = [IO.File]::ReadAllBytes($backup)
@@ -41,7 +41,7 @@ try {
             Write-Host '已恢复原版。'
             exit 0
         }
-        if (($Mode -eq 'Apply') -and ($currentHash -eq $lines[2])) { Write-Host '已应用此离线补丁，无需重复修改。'; exit 0 }
+        if (($Mode -eq 'Apply') -and ($currentHash -eq $lines[2]) -and ($lines[0] -eq 'pcl-offline-3')) { Write-Host '已应用此离线补丁，无需重复修改。'; exit 0 }
     } else {
         if ($Mode -eq 'Restore') { throw '未找到本版的恢复记录。若此前使用 v6，请用 v6 的恢复脚本。' }
         $legacy = @('2227b249e7aeafbd73643961a33ae68050e5ac1e0830d526c346eadd2a7fab80','c78d07219cbe14524dd810136894177473f4d2d442ef77df14465f518d94a35d','ca2e7a63c18f29468c81f4864bf51debcb31bca005ac61e7820a4644ee662cc9','3fb4d356a9dec695ae219e4bd99157e249d5e222ed1c94acf4e67a17bd9c4c97','541c9f95adecc9d3be1c56af4c7b1997c39d1fc41333202a78216fb97e2368af')
@@ -134,7 +134,7 @@ public static class PclPatchCore {
  static string Name(Instruction i) { IMethod x=i.Operand as IMethod;return x==null?"":x.Name.String; }
  static Instruction I(OpCode op,object value) { return new Instruction(op,value); }
  static Instruction I(OpCode op) { return new Instruction(op); }
- static bool Restriction(Instruction x) { return x.OpCode==OpCodes.Ldstr && ((string)x.Operand).Contains("暂时不再提供 MC 下载功能"); }
+ static bool Restriction(Instruction x) { return x.OpCode==OpCodes.Ldstr && ((string)x.Operand).Contains("不再提供 MC 下载功能"); }
  static int FindRestriction(MethodDef m) {
   int[] p=Enumerable.Range(0,m.Body.Instructions.Count).Where(delegate(int i){return Restriction(m.Body.Instructions[i]);}).ToArray();
   Need(p.Length<=1,"限制块不唯一："+m.FullName);return p.Length==0?-1:p[0];
@@ -264,11 +264,77 @@ public static class PclPatchCore {
   add.Add(normal);add.Add(I(OpCodes.Ldftn,save));add.Add(I(OpCodes.Newobj,rowCtor));add.Add(I(OpCodes.Ldnull));add.Add(done);
   Replace(f,j-1,j+2,add);changed.Add(f);notes.Add("恢复在线整合包安装与独立另存为按钮");
  }
+ static void FixHiddenUI(ModuleDef m,List<string> notes,List<MethodDef> changed) {
+  TypeDef left=Type(m,"PageDownloadLeft");MethodDef ctor=Method(left,".ctor",0);
+  IList<Instruction> xs=ctor.Body.Instructions;
+  int init=-1;for(int k=0;k<xs.Count;k++)if(Name(xs[k])=="InitializeComponent")init=k;
+  Need(init>=0,"下载侧栏缺少初始化方法");
+  if(xs.Skip(init+1).Any(delegate(Instruction x){return Name(x)=="get_ItemInstall";})) {
+   // Accept only the known constructor tail: hide two controls and switch to Mod.
+   IList<Instruction> tail=xs.Skip(init+1).ToArray();
+   Need(tail.Count==16 && tail[0].OpCode==OpCodes.Ldarg_0 && Name(tail[1])=="get_ItemInstall" && tail[2].IsLdcI4() && tail[2].GetLdcI4Value()==2 && Name(tail[3])=="set_Visibility" && tail[4].OpCode==OpCodes.Ldarg_0 && Name(tail[5])=="get_LabResource" && tail[6].IsLdcI4() && tail[6].GetLdcI4Value()==2 && Name(tail[7])=="set_Visibility" && tail[8].OpCode==OpCodes.Ldarg_0 && tail[9].IsLdcI4() && tail[10].OpCode==OpCodes.Stfld && ((IField)tail[10].Operand).Name=="PageID" && tail[11].OpCode==OpCodes.Ldarg_0 && Name(tail[12])=="get_ItemMod" && tail[13].IsLdcI4() && tail[13].GetLdcI4Value()==1 && Name(tail[14])=="set_Checked" && tail[15].OpCode==OpCodes.Ret,"下载侧栏隐藏代码结构变化，已停止");
+   Need(xs.Take(init).Any(delegate(Instruction x){return x.OpCode==OpCodes.Stfld && ((IField)x.Operand).Name=="PageID";}),"下载侧栏缺少默认页面初始化");
+   Replace(ctor,init+1,xs.Count-2,new Instruction[]{I(OpCodes.Nop)});
+   changed.Add(ctor);notes.Add("恢复下载侧栏的原版游戏入口与默认页面");
+  }
+  TypeDef resource=Type(m,"PageResource");MethodDef setter=Method(resource,"set_PageType",1);
+  xs=setter.Body.Instructions;
+  int p=-1;for(int k=0;k<xs.Count-4;k++)if(xs[k].OpCode==OpCodes.Ldarg_1 && xs[k+1].IsLdcI4() && xs[k+2].OpCode==OpCodes.Pop && xs[k+3].OpCode==OpCodes.Pop && xs[k+4].IsLdcI4() && xs[k+4].GetLdcI4Value()==2) {Need(p<0,"导入按钮限制块不唯一");p=k;}
+  if(p>=0) {
+   Need(p>0 && p+5<xs.Count && Name(xs[p+5])=="set_Visibility","导入按钮可见性调用变化");
+   IMethod getter=xs.Select(delegate(Instruction x){return x.Operand as IMethod;}).FirstOrDefault(delegate(IMethod x){return x!=null && x.Name=="get_BtnSearchInstallModPack";});
+   Need(getter!=null,"找不到导入按钮控件");int packType=xs[p+1].GetLdcI4Value();
+   // Replace only the value expression; preserve setter's equality check and backing field assignment.
+   Instruction collapsed=Instruction.CreateLdcI4(2),apply=I(OpCodes.Nop);
+   List<Instruction> add=new List<Instruction>();
+   add.Add(I(OpCodes.Ldarg_1));add.Add(Instruction.CreateLdcI4(packType));add.Add(I(OpCodes.Bne_Un,collapsed));
+   add.Add(Instruction.CreateLdcI4(0));add.Add(I(OpCodes.Br,apply));add.Add(collapsed);add.Add(apply);
+   Replace(setter,p,p+4,add);changed.Add(setter);notes.Add("恢复整合包页面的导入按钮（其他资源页面不显示）");
+  }
+ }
+
+ static void FixVersionSelectImport(ModuleDef m,List<string> notes,List<MethodDef> changed) {
+  MethodDef f=Method(Type(m,"PageSelectLeft"),"McFolderListUI",0);
+  f.Body.SimplifyMacros(f.Parameters);IList<Instruction> xs=f.Body.Instructions;
+  int[] titles=Enumerable.Range(0,xs.Count).Where(delegate(int k){return xs[k].OpCode==OpCodes.Ldstr && (string)xs[k].Operand=="导入整合包";}).ToArray();
+  Need(titles.Length==1,"版本选择页的导入列表项不唯一");int title=titles[0],store=-1;
+  for(int k=title+1;k<xs.Count;k++)if(xs[k].OpCode==OpCodes.Stloc) {store=k;break;}
+  Need(store>=0,"版本选择导入列表项缺少局部变量");Local item=(Local)xs[store].Operand;
+  // If the item is already inserted into Children, leave that version untouched.
+  for(int k=0;k<xs.Count-1;k++)if(xs[k].OpCode==OpCodes.Ldloc && xs[k].Operand==item && Name(xs[k+1])=="Add")return;
+  int template=-1;
+  for(int k=0;k<title-5;k++) {
+   if(xs[k].OpCode==OpCodes.Ldsfld && Name(xs[k+1])=="get_PanList" && Name(xs[k+2])=="get_Children" && xs[k+3].OpCode==OpCodes.Ldloc && Name(xs[k+4])=="Add" && xs[k+5].OpCode==OpCodes.Pop)template=k;
+  }
+  Need(template>=0,"无法确定版本选择列表的添加方法");
+  int hook=-1;
+  for(int k=store+1;k<xs.Count;k++)if(Name(xs[k])=="add_Click") {hook=k;break;}
+  Need(hook>store,"版本选择导入列表项缺少点击绑定");
+  IMethod target=null;
+  for(int k=store+1;k<hook;k++)if(xs[k].OpCode==OpCodes.Ldftn)target=(IMethod)xs[k].Operand;
+  Need(target!=null,"无法识别版本选择导入按钮的事件回调");
+  MethodDef callback=target as MethodDef;Need(callback!=null && callback.HasBody,"导入按钮回调无方法体");
+  // Validate the delegate adapter eventually invokes the zero-argument import entry.
+  MethodDef import=Method(Type(m,"ModModpack"),"ModpackInstall",0);
+  bool links=callback.Body.Instructions.Any(delegate(Instruction x){return x.Operand==import;});
+  if(!links) {
+   foreach(Instruction call in callback.Body.Instructions) {
+    MethodDef inner=call.Operand as MethodDef;
+    if(inner!=null && inner.HasBody && inner.Body.Instructions.Any(delegate(Instruction x){return x.Operand==import;}))links=true;
+   }
+  }
+  Need(links,"导入按钮的回调未连接到安装入口，已停止");
+  List<Instruction> add=new List<Instruction>();
+  for(int k=0;k<6;k++)add.Add(k==3?I(OpCodes.Ldloc,item):I(xs[template+k].OpCode,xs[template+k].Operand));
+  add.Add(xs[store+1]);Replace(f,store+1,store+1,add);
+  changed.Add(f);notes.Add("恢复版本选择页“添加或导入”区域的导入整合包按钮");
+ }
+
  public static PclPatchResult Patch(byte[] input) {
   using(ModuleDefMD m=ModuleDefMD.Load(input, (ModuleCreationOptions)null)) {
    Need(m.IsILOnly,"暂不支持混合模式程序");Need(!m.IsStrongNameSigned,"暂不支持强名称签名程序");Need(m.Assembly!=null,"不是有效程序集");
    List<string> notes=new List<string>();List<MethodDef> changed=new List<MethodDef>();
-   FixDownload(m,notes,changed);FixDispatcher(m,notes,changed);FixManual(m,notes,changed);FixOnline(m,notes,changed);
+   FixVersionSelectImport(m,notes,changed);FixHiddenUI(m,notes,changed);FixDownload(m,notes,changed);FixDispatcher(m,notes,changed);FixManual(m,notes,changed);FixOnline(m,notes,changed);
    Need(changed.Count>0,"没有找到待修复入口；此版本可能不需要补丁或结构尚未适配");
    foreach(MethodDef method in changed) {
     method.Body.SimplifyBranches();method.Body.OptimizeBranches();method.Body.KeepOldMaxStack=false;
@@ -314,7 +380,7 @@ public static class PclPatchCore {
     if ([IO.File]::Exists($backup)) {
         if ((Hash-Bytes ([IO.File]::ReadAllBytes($backup))) -ne (Hash-Bytes $source)) { throw '已有原版备份不匹配，拒绝覆盖。' }
     } else { [IO.File]::WriteAllBytes($backup,$source) }
-    $text = 'pcl-offline-1' + "`r`n" + (Hash-Bytes $source) + "`r`n" + (Hash-Bytes $result.Data) + "`r`n"
+    $text = 'pcl-offline-3' + "`r`n" + (Hash-Bytes $source) + "`r`n" + (Hash-Bytes $result.Data) + "`r`n"
     Atomic-Write $record ([Text.Encoding]::UTF8.GetBytes($text))
     Atomic-Write $Target $result.Data
     Write-Host '离线通用补丁已应用，请重新打开 PCL 测试。'

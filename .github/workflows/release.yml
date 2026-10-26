@@ -78,6 +78,22 @@ jobs:
           完整解压离线 ZIP，退出 PCL，将实际使用的 PCL EXE 先拖到“仅检查.cmd”，通过后再拖到“应用补丁.cmd”。保留 EXE 旁的原版备份及记录。已使用 r10/r11 的用户无需先恢复，直接用 r12 应用即可；恢复时请使用 r12 随附的恢复脚本。
           
           适配保留对应 VB/.NET Framework 结构的 PCL 构建，不保证全部历史或未来版本兼容。本包仅包含脚本、源码及解析依赖，不包含修改后的 PCL 启动器或游戏文件。
+          
+          ## 多版本适配与最新实测
+          
+          补丁根据方法和调用关系识别代码结构，不绑定单一 PCL 版本号。已验证样本包括快照版 2.99.0.0（414）与正式版程序集 2.99.0.1。2026-10-26 用户补充实测：更新服务器已恢复，更新后的最新快照版也可成功修补（具体快照版本号尚未记录）。不保证所有历史或未来版本兼容，请先运行“仅检查.cmd”。
+          
+          ## 更新 PCL 本体的正确流程
+          
+          **先恢复原版，再更新 PCL，最后重新应用补丁。**
+          
+          1. 退出 PCL，将当前 EXE 拖到“恢复原版.cmd”上。
+          2. 打开恢复后的 PCL，完成官方更新。
+          3. 再次退出 PCL，将更新后的 EXE 先拖到“仅检查.cmd”，通过后再拖到“应用补丁.cmd”。
+          
+          请保留对应的原版备份与记录。上述流程针对 PCL 本体更新；仅将补丁从 r10/r11 升级到 r12，仍可直接应用。
+          
+          本次仅补充说明，r12 脚本包及校验值保持不变。
           """
           (dist / "release-notes.md").write_text(notes, encoding="utf-8")
           print(sums)
@@ -86,7 +102,8 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Release $RELEASE_TAG already exists; leaving it unchanged."
+            gh release edit "$RELEASE_TAG" --notes-file dist/release-notes.md
+            echo "Updated release notes; existing tag and assets are unchanged."
             exit 0
           fi
           gh release create "$RELEASE_TAG" \
